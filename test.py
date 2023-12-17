@@ -6,7 +6,6 @@ import requests
 from libretranslatepy import LibreTranslateAPI
 from io import BytesIO
 import time
-import threading
 
 SUMMARY_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
 TRANSLATION_URL = "https://google-translate1.p.rapidapi.com/language/translate/v2"
@@ -24,27 +23,13 @@ class MyApp(App):
         
 
     def main(self):
-        my_js_head = """
-            <script >
-            
-            console.log('Start');
-            $('#pdf_doc').on('load', function(){
-        document.write('Start');
-        var iframe = $('#pdf_doc').contents();
-
-        iframe.find("#pdf_doc").click(function(){
-               alert("test");
-               console.log('Click');
-
-        });
-});
-            </script>""" % {'id':str(id(self)), 'callback_function': 'text_selected'}
-        self.page.children['head'].add_child('myjs', my_js_head)
-        self.pdf_doc = None
-
         self.container = gui.VBox(width='100%', height='100%')
         self.text_holder = gui.VBox(width='100%', height='100%')
-
+        self.the_big_text = TextField()
+        self.the_big_text.style['top'] = '10%'
+        self.the_big_text.style['width'] = '45%'
+        self.the_big_text.style['height'] = '45%'
+        self.the_big_text.set_text('Nothing to see here yet')
 
         self.response_text = TextField()
         self.response_text.set_position(650, 0)
@@ -57,15 +42,12 @@ class MyApp(App):
         self.text_holder.style['flex-direction'] = 'row'
         self.container.style['align-items'] = 'center'
   
-        self.file_dialog = CorrectSelectionDialog()
+        self.file_dialog = CorrectFileDialog()
         self.file_dialog.style['display'] = 'none'
 
-        self.the_big_text = gui.Widget(_type='iframe', width=290, height=200, margin='10px')
-        self.the_big_text.attributes['type'] = 'application/pdf'
-        self.the_big_text.style['top'] = '10%'
-        self.the_big_text.style['width'] = '45%'
-        self.the_big_text.style['height'] = '45%'
-        self.the_big_text.attributes['id'] = 'pdf_doc'
+        self.test = gui.Widget( _type='iframe', width=290, height=200, margin='10px')
+        self.test.attributes['src'] = 'D:/uni/coding/translater/Starbase.pdf'
+        self.test.attributes['type'] = 'application/pdf'
 
 
         self.open_button = Button('Открыть файл')
@@ -84,35 +66,32 @@ class MyApp(App):
         self.container.append(self.menu)
         self.container.append(self.file_dialog)
         self.text_holder.append(self.open_button)
-
+        self.text_holder.append(self.test)
         
 
-        self.text_holder.onmousedown.do(self.mouse_down)
-        self.text_holder.onmouseup.do(self.mouse_up)
+        self.the_big_text.onmousedown.do(self.mouse_down)
+        self.the_big_text.onmouseup.do(self.mouse_up)
         self.menu.close_button.onclick.do(self.close)
         self.menu.summarize_button.onclick.do(self.summarize)
         self.menu.paraphraze_button.onclick.do(self.paraphrase)
         self.menu.translate_button.onclick.do(self.translate)
         self.open_button.onclick.do(self.open_file_dialog)
-        self.file_dialog.confirm_value.do(self.open_file)
-        self.the_big_text.onclick.do(self.test)
+        #self.file_dialog.confirm_value.do(self.open_file)
+
+
 
         self.current_text = ''
         self.translator = LibreTranslateAPI("https://translate.terraprint.co/")
 
 
         return self.container
-    
-    def test(self):
-        print('BBBBBBBBBBBBBBBBBB')
 
     def open_file_dialog(self, *args):
         self.file_dialog.style['display'] = 'block'
 
     def open_file(self, *args):
-        self.pdf_doc = PdfDocument(args[1][0])
-        self.the_big_text.attributes['src'] = self.pdf_doc.path_done
-        
+        #print(args)
+        pass
     
     def close(self, *args):
         self.menu.style['display'] = 'none'
@@ -121,7 +100,6 @@ class MyApp(App):
         self.click_coords = list(map(lambda x: int(float(x)), args[1:]))
 
     def mouse_up(self, *args):
-        print('AAAAAAA')
         self.execute_javascript("""
                                     var params = {};
                                     params['text'] = window.getSelection().toString();
@@ -208,43 +186,44 @@ class MainButton(Button):
         self.style['vertical-align'] = 'middle'
 
 
-class CorrectSelectionDialog(FileSelectionDialog):
+class CorrectFileDialog(FileSelectionDialog):
+    @decorate_set_on_listener("(self,emitter)")
+    @decorate_event
+    def cancel_dialog(self, emitter):
+        self.style['display'] = 'none'
+
     @decorate_set_on_listener("(self, emitter, fileList)")
     @decorate_event
     def confirm_value(self, widget):
         """event called pressing on OK button.
            propagates the string content of the input field
         """
+        print('AAAAAAAAAA')
         self.style['display'] = 'none'
         params = (self.fileFolderNavigator.get_selection_list(),)
+        #print(params)
         return params
-    
-    @decorate_set_on_listener("(self,emitter)")
-    @decorate_event
-    def cancel_dialog(self, emitter):
-        """Event generated by the Cancel button click."""
-        self.style['display'] = 'none'
-        return ()
     
     @decorate_set_on_listener("(self,emitter)")
     @decorate_event
     def confirm_dialog(self, emitter):
         """Event generated by the OK button click.
         """
+        # self.reader = PdfReader('Starbase.pdf') #твой пдф
+        # self.page_num = 0
+        # self.the_big_text.set_text(self.reader.pages[0].extract_text())
         
         return ()
     
 
-class PdfDocument(gui.Widget):
-    def __init__(self, path, **kwargs):
-        super().__init__(**kwargs)
+class PdfDocument:
+    def __init__(self, path):
         self._buf = None
-        self._buflock = threading.Lock()
-        self.path_done = self.get_server_path(path)
+        self.get_server_path(path)
         
         
     def get_server_path(self, path):
-        with open(path, "rb") as file:
+        with open(path) as file:
             buf = BytesIO(file.read())
 
         with self._buflock:
@@ -253,7 +232,7 @@ class PdfDocument(gui.Widget):
             self._buf = buf
 
         i = int(time.time() * 1e6)
-        return "/%s/get_pdf_data?update_index=%d" % (id(self), i)
+        self.attributes['src'] = "/%s/get_pdf_data?update_index=%d" % (id(self), i)
 
 
     def get_pdf_data(self, update_index):
